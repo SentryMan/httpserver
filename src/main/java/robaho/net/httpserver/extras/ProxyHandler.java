@@ -82,12 +82,12 @@ public class ProxyHandler implements HttpHandler {
                 try {
                     exchange.getHttpContext().getServer().getExecutor().execute(() -> {
                         try {
-                            transfer(s.getInputStream(),exchange.getResponseBody());
+                            s.getInputStream().transferTo(exchange.getResponseBody());
                         } catch (IOException ex) {
                             ex.printStackTrace();
                         }
                     });
-                    transfer(exchange.getRequestBody(),s.getOutputStream());
+                    exchange.getRequestBody().transferTo(s.getOutputStream());
                 } finally {
                     logger.fine("proxy connection to "+s.getRemoteSocketAddress()+" ended");
                     return;
@@ -109,7 +109,7 @@ public class ProxyHandler implements HttpHandler {
             exchange.getResponseHeaders().putAll(response.headers().map());
             exchange.sendResponseHeaders(response.statusCode(),0);
             try (var os = exchange.getResponseBody ()) {
-                transfer(response.body(),os);
+                response.body().transferTo(os);
             }
         } catch (InterruptedException ex) {
             throw new IOException("unable to proxy request to "+exchange.getRequestURI(),ex);
@@ -127,24 +127,6 @@ public class ProxyHandler implements HttpHandler {
     }
 
     private static int DEFAULT_BUFFER_SIZE = 16384;
-    private static long transfer(InputStream in, OutputStream out) throws IOException {
-        Objects.requireNonNull(out, "out");
-        long transferred = 0;
-        byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
-        int read;
-        while ((read = in.read(buffer, 0, DEFAULT_BUFFER_SIZE)) >= 0) {
-            out.write(buffer, 0, read);
-            out.flush();
-            if (transferred < Long.MAX_VALUE) {
-                try {
-                    transferred = Math.addExact(transferred, read);
-                } catch (ArithmeticException ignore) {
-                    transferred = Long.MAX_VALUE;
-                }
-            }
-        }
-        return transferred;
-    }
 
     private static final Set<String> restrictedHeaders = Set.of("CONNECTION","HOST","UPGRADE","CONTENT-LENGTH");
 
